@@ -1,12 +1,11 @@
-package user
+package userds
 
 import (
 	"database/sql"
-	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 )
 
-func InitDB() (*sql.DB, error) {
+func InitUserDB() (*sql.DB, error) {
 	dsn := "root:shreya123@tcp(localhost:3306)/shreya"
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
@@ -15,6 +14,11 @@ func InitDB() (*sql.DB, error) {
 	if err = db.Ping(); err != nil {
 		return nil, err
 	}
-	fmt.Println("User DB connected.")
-	return db, nil
+	createTableQuery := `
+	CREATE TABLE IF NOT EXISTS users (
+		id INT AUTO_INCREMENT PRIMARY KEY,
+		name VARCHAR(100) NOT NULL
+	)`
+	_, err = db.Exec(createTableQuery)
+	return db, err
 }

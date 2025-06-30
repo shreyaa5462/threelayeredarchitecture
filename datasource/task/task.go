@@ -1,4 +1,4 @@
-package task
+package taskds
 
 import (
 	"database/sql"
@@ -11,5 +11,15 @@ func InitDB() (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return db, db.Ping()
+	if err = db.Ping(); err != nil {
+		return nil, err
+	}
+	createTableQuery := `
+	CREATE TABLE IF NOT EXISTS mytask (
+		id INT AUTO_INCREMENT PRIMARY KEY,
+		description TEXT NOT NULL,
+		completed BOOLEAN DEFAULT FALSE
+		)`
+	_, err = db.Exec(createTableQuery)
+	return db, err
 }

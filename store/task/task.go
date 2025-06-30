@@ -1,8 +1,72 @@
-package taskstore
+// package task
+//
+// import (
+//
+//	"ThreeLayeredArchitecture/models"
+//	"database/sql"
+//
+// )
+//
+//	type TaskStore struct {
+//		DB *sql.DB
+//	}
+//
+//	func NewTaskStore(db *sql.DB) *TaskStore {
+//		return &TaskStore{DB: db}
+//	}
+//
+//	func (s *TaskStore) CreateTask(description string) (models.MYTask, error) {
+//		query := "INSERT INTO mytask (description, completed) VALUES (?, ?)"
+//		result, err := s.DB.Exec(query, description, false)
+//		if err != nil {
+//			return models.MYTask{}, err
+//		}
+//		id, _ := result.LastInsertId()
+//		return models.MYTask{ID: int(id), Description: description, Completed: false}, nil
+//	}
+//
+//	func (s *TaskStore) GetPendingTasks() ([]models.MYTask, error) {
+//		query := "SELECT id, description, completed FROM mytask WHERE completed = FALSE ORDER BY id"
+//		rows, err := s.DB.Query(query)
+//		if err != nil {
+//			return nil, err
+//		}
+//		defer rows.Close()
+//
+//		var tasks []models.MYTask
+//		for rows.Next() {
+//			var t models.MYTask
+//			rows.Scan(&t.ID, &t.Description, &t.Completed)
+//			tasks = append(tasks, t)
+//		}
+//		return tasks, nil
+//	}
+//
+//	func (s *TaskStore) GetTaskByID(id int) (models.MYTask, error) {
+//		query := "SELECT id, description, completed FROM mytask WHERE id = ?"
+//		row := s.DB.QueryRow(query, id)
+//		var t models.MYTask
+//		err := row.Scan(&t.ID, &t.Description, &t.Completed)
+//		return t, err
+//	}
+//
+//	func (s *TaskStore) MarkTaskCompleted(id int) error {
+//		query := "UPDATE mytask SET completed = TRUE WHERE id = ?"
+//		_, err := s.DB.Exec(query, id)
+//		return err
+//	}
+//
+//	func (s *TaskStore) DeleteTask(id int) error {
+//		query := "DELETE FROM mytask WHERE id = ?"
+//		_, err := s.DB.Exec(query, id)
+//		return err
+//	}
+package task
 
 import (
 	"ThreeLayeredArchitecture/models"
 	"database/sql"
+	"log"
 )
 
 type TaskStore struct {
@@ -13,52 +77,58 @@ func NewTaskStore(db *sql.DB) *TaskStore {
 	return &TaskStore{DB: db}
 }
 
-func (ts *TaskStore) Add(description string) (models.Task, error) {
-	query := "INSERT INTO tasks (description, completed) VALUES (?, ?)"
-	result, err := ts.DB.Exec(query, description, false)
+func (s *TaskStore) CreateTask(description string) (models.MYTask, error) {
+	query := "INSERT INTO mytask (description, completed) VALUES (?, ?)"
+	result, err := s.DB.Exec(query, description, false)
 	if err != nil {
-		return models.Task{}, err
+		return models.MYTask{}, err
 	}
-	id, _ := result.LastInsertId()
-	return models.Task{ID: int(id), Description: description, Completed: false}, nil
+	id, err := result.LastInsertId()
+	if err != nil {
+		return models.MYTask{}, err
+	}
+	return models.MYTask{ID: int(id), Description: description, Completed: false}, nil
 }
 
-func (ts *TaskStore) GetPending() ([]models.Task, error) {
-	query := "SELECT id, description, completed FROM tasks WHERE completed = FALSE ORDER BY id"
-	rows, err := ts.DB.Query(query)
+func (s *TaskStore) GetPendingTasks() ([]models.MYTask, error) {
+	query := "SELECT id, description, completed FROM mytask WHERE completed = FALSE ORDER BY id"
+	rows, err := s.DB.Query(query)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Println("Error closing rows:", err)
+		}
+	}()
 
-	var tasks []models.Task
+	var tasks []models.MYTask
 	for rows.Next() {
-		var task models.Task
-		err := rows.Scan(&task.ID, &task.Description, &task.Completed)
-		if err != nil {
+		var t models.MYTask
+		if err := rows.Scan(&t.ID, &t.Description, &t.Completed); err != nil {
 			return nil, err
 		}
-		tasks = append(tasks, task)
+		tasks = append(tasks, t)
 	}
 	return tasks, nil
 }
 
-func (ts *TaskStore) GetByID(id int) (models.Task, error) {
-	query := "SELECT id, description, completed FROM tasks WHERE id = ?"
-	row := ts.DB.QueryRow(query, id)
-	var task models.Task
-	err := row.Scan(&task.ID, &task.Description, &task.Completed)
-	return task, err
+func (s *TaskStore) GetTaskByID(id int) (models.MYTask, error) {
+	query := "SELECT id, description, completed FROM mytask WHERE id = ?"
+	row := s.DB.QueryRow(query, id)
+	var t models.MYTask
+	err := row.Scan(&t.ID, &t.Description, &t.Completed)
+	return t, err
 }
 
-func (ts *TaskStore) MarkComplete(id int) error {
-	query := "UPDATE tasks SET completed = TRUE WHERE id = ?"
-	_, err := ts.DB.Exec(query, id)
+func (s *TaskStore) MarkTaskCompleted(id int) error {
+	query := "UPDATE mytask SET completed = TRUE WHERE id = ?"
+	_, err := s.DB.Exec(query, id)
 	return err
 }
 
-func (ts *TaskStore) Delete(id int) error {
-	query := "DELETE FROM tasks WHERE id = ?"
-	_, err := ts.DB.Exec(query, id)
+func (s *TaskStore) DeleteTask(id int) error {
+	query := "DELETE FROM mytask WHERE id = ?"
+	_, err := s.DB.Exec(query, id)
 	return err
 }

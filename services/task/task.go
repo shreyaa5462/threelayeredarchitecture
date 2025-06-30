@@ -1,45 +1,41 @@
-package taskservice
+package task
 
 import (
 	"ThreeLayeredArchitecture/models"
-	"ThreeLayeredArchitecture/store/task"
 )
 
-type TaskService struct {
-	Store *taskstore.TaskStore
+type TaskStoreInterface interface {
+	CreateTask(description string) (models.MYTask, error)
+	GetPendingTasks() ([]models.MYTask, error)
+	GetTaskByID(id int) (models.MYTask, error)
+	MarkTaskCompleted(id int) error
+	DeleteTask(id int) error
 }
 
-func NewTaskService(store *taskstore.TaskStore) *TaskService {
+type TaskService struct {
+	Store TaskStoreInterface
+}
+
+func NewTaskService(store TaskStoreInterface) *TaskService {
 	return &TaskService{Store: store}
 }
 
-func (s *TaskService) AddTask(desc string) (models.Task, error) {
-	return s.Store.Add(desc)
+func (s *TaskService) CreateTask(description string) (models.MYTask, error) {
+	return s.Store.CreateTask(description)
 }
 
-func (s *TaskService) GetPendingTasks() ([]models.Task, error) {
-	return s.Store.GetPending()
+func (s *TaskService) GetPendingTasks() ([]models.MYTask, error) {
+	return s.Store.GetPendingTasks()
 }
 
-func (s *TaskService) GetTaskByID(id int) (models.Task, error) {
-	return s.Store.GetByID(id)
+func (s *TaskService) GetTask(id int) (models.MYTask, error) {
+	return s.Store.GetTaskByID(id)
 }
 
-func (s *TaskService) CompleteTask(id int) (string, error) {
-	task, err := s.Store.GetByID(id)
-	if err != nil {
-		return "", err
-	}
-	if task.Completed {
-		return "Task already completed", nil
-	}
-	err = s.Store.MarkComplete(id)
-	if err != nil {
-		return "", err
-	}
-	return "Task marked as complete", nil
+func (s *TaskService) CompleteTask(id int) error {
+	return s.Store.MarkTaskCompleted(id)
 }
 
 func (s *TaskService) DeleteTask(id int) error {
-	return s.Store.Delete(id)
+	return s.Store.DeleteTask(id)
 }

@@ -1,48 +1,69 @@
-package user
+package userhandler
 
 import (
+	"ThreeLayeredArchitecture/models"
 	"encoding/json"
 	"net/http"
 	"strconv"
-
-	"ThreeLayeredArchitecture/models"
-	"ThreeLayeredArchitecture/services/user"
+	"strings"
 )
 
-type UserHandler struct {
-	Service *user.UserService
+type UserServiceInterface interface {
+	GetAllUsers() ([]models.User, error)
+	GetUserByID(id int) (models.User, error)
+	CreateUser(user models.User) (models.User, error)
 }
 
-func NewUserHandler(service *user.UserService) *UserHandler {
+type UserHandler struct {
+	Service UserServiceInterface
+}
+
+func NewUserHandler(service UserServiceInterface) *UserHandler {
 	return &UserHandler{Service: service}
 }
 
-func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
-	var user models.User
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		http.Error(w, "Invalid input", http.StatusBadRequest)
+func (h *UserHandler) HandleUsers(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		users, err := h.Service.GetAllUsers()
+		if err != nil {
+			http.Error(w, "Failed to fetch users", http.StatusInternalServerError)
+			return
+		}
+		if err := json.NewEncoder(w).Encode(users); err != nil {
+			http.Error(w, "Failed to write response", http.StatusInternalServerError)
+		}
 		return
-	}
 
-	newUser, err := h.Service.CreateUser(user)
-	if err != nil {
-		http.Error(w, "Failed to create user", http.StatusInternalServerError)
+	case http.MethodPost:
+		var user models.User
+		if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+			http.Error(w, "Invalid input", http.StatusBadRequest)
+			return
+		}
+		createdUser, err := h.Service.CreateUser(user)
+		if err != nil {
+			http.Error(w, "Failed to create user", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		if err := json.NewEncoder(w).Encode(createdUser); err != nil {
+			http.Error(w, "Failed to write response", http.StatusInternalServerError)
+		}
 		return
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
-	json.NewEncoder(w).Encode(newUser)
 }
 
-func (h *UserHandler) GetAllUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := h.Service.GetAllUsers()
-	if err != nil {
-		http.Error(w, "Failed to get users", http.StatusInternalServerError)
+func (h *UserHandler) HandleUserByID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	json.NewEncoder(w).Encode(users)
-}
 
-func (h *UserHandler) GetUserByID(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
+	idStr := strings.TrimPrefix(r.URL.Path, "/user/")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
@@ -54,5 +75,8 @@ func (h *UserHandler) GetUserByID(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
-	json.NewEncoder(w).Encode(user)
+
+	if err := json.NewEncoder(w).Encode(user); err != nil {
+		http.Error(w, "Failed to write response", http.StatusInternalServerError)
+	}
 }
