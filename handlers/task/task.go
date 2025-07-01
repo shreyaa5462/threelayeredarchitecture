@@ -101,14 +101,6 @@ import (
 	"ThreeLayeredArchitecture/models"
 )
 
-type TaskServiceInterface interface {
-	CreateTask(description string) (models.MYTask, error)
-	GetPendingTasks() ([]models.MYTask, error)
-	GetTask(id int) (models.MYTask, error)
-	CompleteTask(id int) error
-	DeleteTask(id int) error
-}
-
 type TaskHandler struct {
 	Service TaskServiceInterface
 }
@@ -126,11 +118,14 @@ func (h *TaskHandler) HandleTasks(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		task, err := h.Service.CreateTask(input.Description)
+
 		if err != nil {
 			fmt.Println("Error while creating task:", err)
 			http.Error(w, "Failed to create task", http.StatusInternalServerError)
+
 			return
 		}
+
 		if err := json.NewEncoder(w).Encode(task); err != nil {
 			http.Error(w, "Failed to write response", http.StatusInternalServerError)
 		}
@@ -141,7 +136,9 @@ func (h *TaskHandler) HandleTasks(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to fetch tasks", http.StatusInternalServerError)
 			return
 		}
+
 		w.Header().Set("Content-Type", "application/json")
+
 		if err := json.NewEncoder(w).Encode(tasks); err != nil {
 			http.Error(w, "Failed to write response", http.StatusInternalServerError)
 		}
@@ -170,6 +167,7 @@ func (h *TaskHandler) HandleTasks(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to delete task", http.StatusInternalServerError)
 			return
 		}
+
 		if _, err := w.Write([]byte("Task deleted")); err != nil {
 			http.Error(w, "Failed to write response", http.StatusInternalServerError)
 		}
@@ -188,9 +186,11 @@ func (h *TaskHandler) HandleTaskByID(w http.ResponseWriter, r *http.Request) {
 	// Fallback for Go 1.21 (use URL query param instead of PathValue)
 	idStr := r.URL.Query().Get("id")
 	id, err := strconv.Atoi(idStr)
+
 	if err != nil {
 		fmt.Println("Error while parsing task ID:", err)
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
+
 		return
 	}
 

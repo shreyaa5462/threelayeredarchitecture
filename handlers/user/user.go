@@ -1,4 +1,4 @@
-package userhandler
+package user
 
 import (
 	"ThreeLayeredArchitecture/models"
@@ -7,12 +7,6 @@ import (
 	"strconv"
 	"strings"
 )
-
-type UserServiceInterface interface {
-	GetAllUsers() ([]models.User, error)
-	GetUserByID(id int) (models.User, error)
-	CreateUser(user models.User) (models.User, error)
-}
 
 type UserHandler struct {
 	Service UserServiceInterface
@@ -30,9 +24,11 @@ func (h *UserHandler) HandleUsers(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to fetch users", http.StatusInternalServerError)
 			return
 		}
+
 		if err := json.NewEncoder(w).Encode(users); err != nil {
 			http.Error(w, "Failed to write response", http.StatusInternalServerError)
 		}
+
 		return
 
 	case http.MethodPost:
@@ -41,15 +37,20 @@ func (h *UserHandler) HandleUsers(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid input", http.StatusBadRequest)
 			return
 		}
+
 		createdUser, err := h.Service.CreateUser(user)
+
 		if err != nil {
 			http.Error(w, "Failed to create user", http.StatusInternalServerError)
 			return
 		}
+
 		w.WriteHeader(http.StatusCreated)
+
 		if err := json.NewEncoder(w).Encode(createdUser); err != nil {
 			http.Error(w, "Failed to write response", http.StatusInternalServerError)
 		}
+
 		return
 
 	default:
@@ -65,6 +66,7 @@ func (h *UserHandler) HandleUserByID(w http.ResponseWriter, r *http.Request) {
 
 	idStr := strings.TrimPrefix(r.URL.Path, "/user/")
 	id, err := strconv.Atoi(idStr)
+
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return

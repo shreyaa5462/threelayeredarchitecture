@@ -61,13 +61,17 @@ func TestCreateTask(t *testing.T) {
 	for i, tt := range tests {
 		i = i + 1
 		db, mock, err := sqlmock.New()
+
 		if err != nil {
 			log.Fatalf("failed to create mock db: %v", err)
 		}
+
 		store := task.NewTaskStore(db)
+
 		mock.ExpectExec("INSERT INTO mytask").
 			WithArgs(tt.description, false).
 			WillReturnResult(sqlmock.NewResult(int64(i), 1))
+
 		result, err := store.CreateTask(tt.description)
 		if (err != nil) != tt.expectErr {
 			t.Errorf("expected error: %v, got: %v", tt.expectErr, err)
