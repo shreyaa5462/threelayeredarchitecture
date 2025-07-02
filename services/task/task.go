@@ -12,8 +12,8 @@ func NewTaskService(store TaskStoreInterface) *TaskService {
 	return &TaskService{Store: store}
 }
 
-func (s *TaskService) CreateTask(description string) (models.MYTask, error) {
-	return s.Store.CreateTask(description)
+func (s *TaskService) CreateTask(task models.MYTask) (models.MYTask, error) {
+	return s.Store.CreateTask(task)
 }
 
 func (s *TaskService) GetPendingTasks() ([]models.MYTask, error) {

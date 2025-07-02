@@ -77,9 +77,9 @@ func NewTaskStore(db *sql.DB) *TaskStore {
 	return &TaskStore{DB: db}
 }
 
-func (s *TaskStore) CreateTask(description string) (models.MYTask, error) {
+func (s *TaskStore) CreateTask(task models.MYTask) (models.MYTask, error) {
 	query := "INSERT INTO mytask (description, completed) VALUES (?, ?)"
-	result, err := s.DB.Exec(query, description, false)
+	result, err := s.DB.Exec(query, task.Description, false)
 
 	if err != nil {
 		return models.MYTask{}, err
@@ -91,7 +91,7 @@ func (s *TaskStore) CreateTask(description string) (models.MYTask, error) {
 		return models.MYTask{}, err
 	}
 
-	return models.MYTask{ID: int(id), Description: description, Completed: false}, nil
+	return models.MYTask{ID: int(id), Description: task.Description, Completed: false}, nil
 }
 
 func (s *TaskStore) GetPendingTasks() ([]models.MYTask, error) {
