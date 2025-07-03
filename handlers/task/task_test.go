@@ -1,170 +1,316 @@
 package task
 
 import (
-	"ThreeLayeredArchitecture/models"
-	"bytes"
-	"encoding/json"
+	task "ThreeLayeredArchitecture/models"
+	"context"
 	"errors"
+	"github.com/gorilla/mux"
+	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/container"
+	gofrHttp "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/http/response"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 )
 
-func TestTaskHandler_HandleTasks(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockService := NewMockTaskServiceInterface(ctrl)
-	handler := NewTaskHandler(mockService)
-
-	type testCase struct {
-		id         int
-		desc       string
-		method     string
-		url        string
-		body       interface{}
-		mockFunc   func()
-		wantStatus int
-	}
-
-	testCases := []testCase{
+func TestGetAllTasks(t *testing.T) {
+	tests := []struct {
+		name        string
+		mockTasks   []task.MYTask
+		mockError   error
+		expectedRes any
+		expectedErr error
+	}{
 		{
-			id:     1,
-			desc:   "POST valid input",
-			method: http.MethodPost,
-			url:    "/tasks",
-			body:   models.MYTask{Description: "Clean Room"},
-			mockFunc: func() {
-				mockService.EXPECT().CreateTask("Clean Room").
-					Return(models.MYTask{ID: 1, Description: "Clean Room", Completed: false}, nil)
+			name: "Success - returns tasks",
+			mockTasks: []task.MYTask{
+				{ID: 1, Description: "Task 1"},
+				{ID: 2, Description: "Task 2"},
 			},
-			wantStatus: http.StatusOK,
+			mockError:   nil,
+			expectedRes: response.Raw{Data: []task.MYTask{{ID: 1, Description: "Task 1"}, {ID: 2, Description: "Task 2"}}},
+			expectedErr: nil,
 		},
 		{
-			id:     2,
-			desc:   "GET tasks",
-			method: http.MethodGet,
-			url:    "/tasks",
-			mockFunc: func() {
-				mockService.EXPECT().GetPendingTasks().
-					Return([]models.MYTask{
-						{ID: 1, Description: "Task1", Completed: false},
-					}, nil)
-			},
-			wantStatus: http.StatusOK,
-		},
-		{
-			id:     3,
-			desc:   "PUT complete task",
-			method: http.MethodPut,
-			url:    "/tasks?id=1",
-			mockFunc: func() {
-				mockService.EXPECT().CompleteTask(1).Return(nil)
-			},
-			wantStatus: http.StatusOK,
-		},
-		{
-			id:     4,
-			desc:   "DELETE task failure",
-			method: http.MethodDelete,
-			url:    "/tasks?id=2",
-			mockFunc: func() {
-				var err = errors.New("fail")
-				mockService.EXPECT().DeleteTask(2).Return(err)
-			},
-			wantStatus: http.StatusInternalServerError,
+			name:        "Error - service returns error",
+			mockTasks:   nil,
+			mockError:   errors.New("db error"),
+			expectedRes: nil,
+			expectedErr: errors.New("db error"),
 		},
 	}
 
-	for _, tc := range testCases {
-		var reqBody *bytes.Buffer
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			mockContainer, _ := container.NewMockContainer(t)
+			tctx := &gofr.Context{
+				Context:   context.Background(),
+				Container: mockContainer,
+			}
 
-		if tc.body != nil {
-			bodyBytes, _ := json.Marshal(tc.body)
-			reqBody = bytes.NewBuffer(bodyBytes)
-		} else {
-			reqBody = &bytes.Buffer{}
-		}
+			ctrl := gomock.NewController(t)
+			mockSvc := NewMockTaskServiceInterface(ctrl)
+			h := NewTaskHandler(mockSvc)
 
-		req := httptest.NewRequest(tc.method, tc.url, reqBody)
-		w := httptest.NewRecorder()
+			mockSvc.EXPECT().GetPendingTasks(tctx).Return(tc.mockTasks, tc.mockError)
 
-		if tc.mockFunc != nil {
-			tc.mockFunc()
-		}
+			req := httptest.NewRequest(http.MethodGet, "/tasks", nil)
+			tctx.Request = gofrHttp.NewRequest(req)
 
-		handler.HandleTasks(w, req)
+			resp, err := h.GetPendingTasks(tctx)
 
-		if w.Code != tc.wantStatus {
-			t.Errorf("Test ID %d - %s: expected status %d, got %d", tc.id, tc.desc, tc.wantStatus, w.Code)
-		}
+			assert.Equal(t, tc.expectedRes, resp)
+			assert.Equal(t, tc.expectedErr, err)
+		})
 	}
 }
 
-func TestTaskHandler_HandleTaskByID(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockService := NewMockTaskServiceInterface(ctrl)
-	handler := NewTaskHandler(mockService)
-
-	type testCase struct {
-		id         int
-		desc       string
-		method     string
-		url        string
-		mockFunc   func()
-		wantStatus int
-	}
-
-	testCases := []testCase{
+func TestCreateTask(t *testing.T) {
+	tests := []struct {
+		name           string
+		body           string
+		expectedTask   task.MYTask
+		mockErr        error
+		expectBindFail bool
+	}{
 		{
-			id:     1,
-			desc:   "GET valid task",
-			method: http.MethodGet,
-			url:    "/task?id=1",
-			mockFunc: func() {
-				mockService.EXPECT().GetTask(1).Return(models.MYTask{ID: 1, Description: "Study"}, nil)
-			},
-			wantStatus: http.StatusOK,
+			name:         "Valid task creation",
+			body:         `{"id": 1, "Description": "New Task"}`,
+			expectedTask: task.MYTask{ID: 1, Description: "New Task"},
 		},
 		{
-			id:         2,
-			desc:       "Invalid method used",
-			method:     http.MethodPost,
-			url:        "/task?id=1",
-			mockFunc:   nil,
-			wantStatus: http.StatusMethodNotAllowed,
+			name:           "Invalid JSON body",
+			body:           `{invalid-json}`,
+			expectBindFail: true,
 		},
 		{
-			id:         3,
-			desc:       "Invalid ID format",
-			method:     http.MethodGet,
-			url:        "/task?id=abc",
-			mockFunc:   nil,
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			id:     4,
-			desc:   "Task not found",
-			method: http.MethodGet,
-			url:    "/task?id=5",
-			mockFunc: func() {
-				mockService.EXPECT().GetTask(5).Return(models.MYTask{}, errors.New("not found"))
-			},
-			wantStatus: http.StatusNotFound,
+			name:         "Service returns error",
+			body:         `{"id": 2, "Description": "Fail Task"}`,
+			expectedTask: task.MYTask{ID: 2, Description: "Fail Task"},
+			mockErr:      errors.New("db failure"),
 		},
 	}
 
-	for _, tc := range testCases {
-		req := httptest.NewRequest(tc.method, tc.url, nil)
-		w := httptest.NewRecorder()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockContainer, _ := container.NewMockContainer(t)
+			tctx := &gofr.Context{
+				Context:   context.Background(),
+				Container: mockContainer,
+			}
 
-		if tc.mockFunc != nil {
-			tc.mockFunc()
-		}
+			ctrl := gomock.NewController(t)
+			mockSvc := NewMockTaskServiceInterface(ctrl)
+			h := NewTaskHandler(mockSvc)
 
-		handler.HandleTaskByID(w, req)
+			req := httptest.NewRequest(http.MethodPost, "/tasks", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			tctx.Request = gofrHttp.NewRequest(req)
 
-		if w.Code != tc.wantStatus {
-			t.Errorf("Test ID %d - %s: expected status %d, got %d", tc.id, tc.desc, tc.wantStatus, w.Code)
-		}
+			if !tt.expectBindFail {
+				mockSvc.EXPECT().CreateTask(tctx, tt.expectedTask).Return(tt.expectedTask, tt.mockErr)
+			}
+
+			resp, err := h.CreateTask(tctx)
+
+			if tt.expectBindFail {
+				assert.Error(t, err)
+				assert.Nil(t, resp)
+			} else if tt.mockErr != nil {
+				assert.EqualError(t, err, tt.mockErr.Error())
+				assert.Nil(t, resp)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, response.Raw{Data: tt.expectedTask}, resp)
+			}
+		})
+	}
+}
+
+func TestDeleteTask(t *testing.T) {
+	tests := []struct {
+		name        string
+		param       string
+		expectedMsg string
+		mockErr     error
+		expectFail  bool
+	}{
+		{
+			name:        "Valid Delete",
+			param:       "2",
+			expectedMsg: "deleted",
+		},
+		{
+			name:       "Invalid ID",
+			param:      "abc",
+			expectFail: true,
+		},
+		{
+			name:    "Service returns error",
+			param:   "5",
+			mockErr: errors.New("not found"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockContainer, _ := container.NewMockContainer(t)
+			tctx := &gofr.Context{
+				Context:   context.Background(),
+				Container: mockContainer,
+			}
+
+			ctrl := gomock.NewController(t)
+			mockSvc := NewMockTaskServiceInterface(ctrl)
+			h := NewTaskHandler(mockSvc)
+
+			req := httptest.NewRequest(http.MethodDelete, "/tasks", nil)
+			req = mux.SetURLVars(req, map[string]string{"id": tt.param})
+			tctx.Request = gofrHttp.NewRequest(req)
+
+			if !tt.expectFail {
+				id, _ := strconv.Atoi(tt.param)
+				mockSvc.EXPECT().DeleteTask(tctx, id).Return(tt.mockErr)
+			}
+			id, _ := strconv.Atoi(tt.param)
+
+			resp, err := h.DeleteTask(tctx, id)
+
+			if tt.expectFail {
+				assert.Error(t, err)
+				assert.Nil(t, resp)
+			} else if tt.mockErr != nil {
+				assert.EqualError(t, err, tt.mockErr.Error())
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, response.Raw{Data: tt.expectedMsg}, resp)
+			}
+		})
+	}
+}
+
+func TestMarkTaskComplete(t *testing.T) {
+	tests := []struct {
+		name        string
+		param       string
+		expectedMsg string
+		mockErr     error
+		expectFail  bool
+	}{
+		{
+			name:        "Mark complete success",
+			param:       "1",
+			expectedMsg: "marked complete",
+		},
+		{
+			name:       "Invalid ID param",
+			param:      "bad",
+			expectFail: true,
+		},
+		{
+			name:    "Service error",
+			param:   "9",
+			mockErr: errors.New("failed update"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockContainer, _ := container.NewMockContainer(t)
+			tctx := &gofr.Context{
+				Context:   context.Background(),
+				Container: mockContainer,
+			}
+
+			ctrl := gomock.NewController(t)
+			mockSvc := NewMockTaskServiceInterface(ctrl)
+			h := NewTaskHandler(mockSvc)
+
+			req := httptest.NewRequest(http.MethodPatch, "/tasks?id="+tt.param, nil)
+			tctx.Request = gofrHttp.NewRequest(req)
+
+			if !tt.expectFail {
+				id, _ := strconv.Atoi(tt.param)
+				mockSvc.EXPECT().CompleteTask(tctx, id).Return(tt.expectedMsg, tt.mockErr)
+			}
+
+			resp, err := h.CompleteTask(tctx)
+
+			if tt.expectFail {
+				assert.Error(t, err)
+				assert.Nil(t, resp)
+			} else if tt.mockErr != nil {
+				assert.EqualError(t, err, tt.mockErr.Error())
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, response.Raw{Data: tt.expectedMsg}, resp)
+			}
+		})
+	}
+}
+
+func TestHandleTaskByID(t *testing.T) {
+	tests := []struct {
+		name       string
+		pathParam  string
+		expected   task.MYTask
+		mockErr    error
+		expectFail bool
+	}{
+		{
+			name:      "Valid Task Fetch",
+			pathParam: "2",
+			expected:  task.MYTask{ID: 2, Description: "Test"},
+		},
+		{
+			name:       "Invalid ID",
+			pathParam:  "x",
+			expectFail: true,
+		},
+		{
+			name:      "Service Error",
+			pathParam: "5",
+			mockErr:   errors.New("not found"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockContainer, _ := container.NewMockContainer(t)
+			tctx := &gofr.Context{
+				Context:   context.Background(),
+				Container: mockContainer,
+			}
+
+			ctrl := gomock.NewController(t)
+			mockSvc := NewMockTaskServiceInterface(ctrl)
+			h := NewTaskHandler(mockSvc)
+
+			req := httptest.NewRequest(http.MethodGet, "/tasks/"+tt.pathParam, nil)
+			req = mux.SetURLVars(req, map[string]string{"id": tt.pathParam})
+			tctx.Request = gofrHttp.NewRequest(req)
+
+			if !tt.expectFail {
+				id, _ := strconv.Atoi(tt.pathParam)
+				mockSvc.EXPECT().GetTask(tctx, id).Return(tt.expected, tt.mockErr)
+			}
+
+			resp, err := h.GetTaskByID(tctx)
+
+			if tt.expectFail {
+				assert.Error(t, err)
+				assert.Nil(t, resp)
+			} else if tt.mockErr != nil {
+				assert.EqualError(t, err, tt.mockErr.Error())
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, response.Raw{Data: tt.expected}, resp)
+			}
+		})
 	}
 }
