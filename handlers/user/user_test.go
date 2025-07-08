@@ -1,181 +1,240 @@
 package user
 
 import (
-	"ThreeLayeredArchitecture/models"
-	"bytes"
+	user "ThreeLayeredArchitecture/models"
+	"context"
 	"encoding/json"
 	"errors"
-	"go.uber.org/mock/gomock"
+	"github.com/gorilla/mux"
+	"gofr.dev/pkg/gofr/http/response"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/container"
+	gofrHttp "gofr.dev/pkg/gofr/http"
 )
 
-func TestUserHandler_HandleUsers(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockService := NewMockUserServiceInterface(ctrl)
-	handler := NewUserHandler(mockService)
-
-	type testCase struct {
-		id         int
-		desc       string
-		method     string
-		body       interface{}
-		mockFunc   func()
-		wantStatus int
+func TestCreateUser(t *testing.T) {
+	type gofrResponse struct {
+		result any
+		err    error
 	}
 
-	testCases := []testCase{
+	mockContainer, _ := container.NewMockContainer(t)
+	tctx := &gofr.Context{
+		Context:   context.Background(),
+		Request:   nil,
+		Container: mockContainer,
+	}
+
+	tests := []struct {
+		name           string
+		inputBody      string
+		existingUser   user.User
+		mockErr        error
+		expectedResult any
+		expectedErr    error
+		useMock        bool
+	}{
 		{
-			id:     1,
-			desc:   "GET users - success",
-			method: http.MethodGet,
-			mockFunc: func() {
-				mockService.EXPECT().GetAllUsers().Return([]models.User{
-					{ID: 1, Name: "Ram"},
-					{ID: 2, Name: "Shyam"},
-				}, nil)
-			},
-			wantStatus: http.StatusOK,
+			name:           "Successful CreateUser",
+			inputBody:      `{"id":10,"name":"Alice"}`,
+			existingUser:   user.User{ID: 10, Name: "Alice"},
+			mockErr:        nil,
+			expectedResult: response.Raw{Data: user.User{ID: 10, Name: "Alice"}},
+			expectedErr:    nil,
+			useMock:        true,
 		},
 		{
-			id:     2,
-			desc:   "GET users - failure",
-			method: http.MethodGet,
-			mockFunc: func() {
-				mockService.EXPECT().GetAllUsers().Return(nil, errors.New("db error"))
-			},
-			wantStatus: http.StatusInternalServerError,
+			name:        "Failed Binding",
+			inputBody:   `{Alice}`,
+			expectedErr: &json.SyntaxError{},
+			useMock:     false,
 		},
 		{
-			id:     3,
-			desc:   "POST user - success",
-			method: http.MethodPost,
-			body:   models.User{Name: "Sita"},
-			mockFunc: func() {
-				mockService.EXPECT().CreateUser(models.User{Name: "Sita"}).
-					Return(models.User{ID: 3, Name: "Sita"}, nil)
-			},
-			wantStatus: http.StatusCreated,
-		},
-		{
-			id:         4,
-			desc:       "POST user - invalid JSON",
-			method:     http.MethodPost,
-			body:       "invalid-json",
-			mockFunc:   func() {},
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			id:     5,
-			desc:   "POST user - creation failed",
-			method: http.MethodPost,
-			body:   models.User{Name: "Lakshman"},
-			mockFunc: func() {
-				mockService.EXPECT().CreateUser(models.User{Name: "Lakshman"}).
-					Return(models.User{}, errors.New("insert fail"))
-			},
-			wantStatus: http.StatusInternalServerError,
+			name:         "Service Error",
+			inputBody:    `{"id":20,"name":"Bob"}`,
+			existingUser: user.User{ID: 20, Name: "Bob"},
+			mockErr:      errors.New("service failure"),
+			expectedErr:  errors.New("service failure"),
+			useMock:      true,
 		},
 	}
 
-	for _, tc := range testCases {
-		var reqBody *bytes.Buffer
-		if tc.body != nil {
-			if s, ok := tc.body.(string); ok {
-				reqBody = bytes.NewBuffer([]byte(s))
-			} else {
-				b, _ := json.Marshal(tc.body)
-				reqBody = bytes.NewBuffer(b)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockSvc := NewMockUserServiceInterface(ctrl)
+			h := NewUserHandler(mockSvc)
+
+			req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(tt.inputBody))
+			req.Header.Set("Content-Type", "application/json")
+			reqCtx := gofrHttp.NewRequest(req)
+			tctx.Request = reqCtx
+
+			if tt.useMock {
+				mockSvc.EXPECT().CreateUser(tctx, tt.existingUser).Return(tt.existingUser, tt.mockErr)
 			}
-		} else {
-			reqBody = &bytes.Buffer{}
-		}
 
-		req := httptest.NewRequest(tc.method, "/users", reqBody)
-		w := httptest.NewRecorder()
+			val, err := h.CreateUser(tctx)
 
-		if tc.mockFunc != nil {
-			tc.mockFunc()
-		}
-
-		handler.HandleUsers(w, req)
-
-		if w.Code != tc.wantStatus {
-			t.Errorf("Test ID %d - %s: expected status %d, got %d", tc.id, tc.desc, tc.wantStatus, w.Code)
-		}
+			if tt.expectedErr != nil {
+				switch tt.expectedErr.(type) {
+				case *json.SyntaxError:
+					assert.IsType(t, &json.SyntaxError{}, err)
+				default:
+					assert.EqualError(t, tt.expectedErr, err.Error())
+				}
+				assert.Nil(t, val)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedResult, val)
+			}
+		})
 	}
 }
 
-func TestUserHandler_HandleUserByID(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockService := NewMockUserServiceInterface(ctrl)
-	handler := NewUserHandler(mockService)
-
-	type testCase struct {
-		id         int
-		desc       string
-		url        string
-		method     string
-		mockFunc   func()
-		wantStatus int
+func TestGetAllUsers(t *testing.T) {
+	type gofrResponse struct {
+		result any
+		err    error
 	}
 
-	testCases := []testCase{
+	mockContainer, _ := container.NewMockContainer(t)
+	tctx := &gofr.Context{
+		Context:   context.Background(),
+		Request:   nil,
+		Container: mockContainer,
+	}
+
+	tests := []struct {
+		name           string
+		mockResult     []user.User
+		mockErr        error
+		expectedResult any
+		expectedErr    error
+	}{
 		{
-			id:     1,
-			desc:   "GET user by ID - success",
-			url:    "/user/1",
-			method: http.MethodGet,
-			mockFunc: func() {
-				mockService.EXPECT().GetUserByID(1).Return(models.User{ID: 1, Name: "Ram"}, nil)
-			},
-			wantStatus: http.StatusOK,
+			name:           "Successful GetAllUsers",
+			mockResult:     []user.User{{ID: 1, Name: "A"}, {ID: 2, Name: "B"}},
+			mockErr:        nil,
+			expectedResult: response.Raw{Data: []user.User{{ID: 1, Name: "A"}, {ID: 2, Name: "B"}}},
+			expectedErr:    nil,
 		},
 		{
-			id:         2,
-			desc:       "Invalid method",
-			url:        "/user/1",
-			method:     http.MethodPost,
-			mockFunc:   nil,
-			wantStatus: http.StatusMethodNotAllowed,
-		},
-		{
-			id:         3,
-			desc:       "Invalid ID format",
-			url:        "/user/abc",
-			method:     http.MethodGet,
-			mockFunc:   nil,
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			id:     4,
-			desc:   "User not found",
-			url:    "/user/99",
-			method: http.MethodGet,
-			mockFunc: func() {
-				mockService.EXPECT().GetUserByID(99).Return(models.User{}, errors.New("not found"))
-			},
-			wantStatus: http.StatusNotFound,
+			name:        "Service Error",
+			mockErr:     errors.New("db error"),
+			expectedErr: errors.New("db error"),
+			// no result expected on error
+			expectedResult: nil,
 		},
 	}
 
-	for _, tc := range testCases {
-		req := httptest.NewRequest(tc.method, tc.url, nil)
-		w := httptest.NewRecorder()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockSvc := NewMockUserServiceInterface(ctrl)
+			h := NewUserHandler(mockSvc)
 
-		if tc.mockFunc != nil {
-			tc.mockFunc()
-		}
+			req := httptest.NewRequest(http.MethodGet, "/users", http.NoBody)
+			req.Header.Set("Content-Type", "application/json")
+			tctx.Request = gofrHttp.NewRequest(req)
 
-		handler.HandleUserByID(w, req)
+			mockSvc.EXPECT().GetAllUsers(tctx).Return(tt.mockResult, tt.mockErr)
 
-		if w.Code != tc.wantStatus {
-			t.Errorf("Test ID %d - %s: expected status %d, got %d", tc.id, tc.desc, tc.wantStatus, w.Code)
-		}
+			val, err := h.GetAllUsers(tctx)
+
+			if tt.expectedErr != nil {
+				assert.EqualError(t, tt.expectedErr, err.Error())
+				assert.Nil(t, val)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedResult, val)
+			}
+		})
+	}
+}
+
+func TestGetUserByID(t *testing.T) {
+	type gofrResponse struct {
+		result any
+		err    error
+	}
+
+	mockContainer, _ := container.NewMockContainer(t)
+	ctx := &gofr.Context{
+		Context:   context.Background(),
+		Request:   nil,
+		Container: mockContainer,
+	}
+
+	tests := []struct {
+		name           string
+		pathParam      string
+		mockUser       user.User
+		mockErr        error
+		expectedResult any
+		expectedErr    error
+		useMock        bool
+	}{
+		{
+			name:           "Successful GetUserByID",
+			pathParam:      "5",
+			mockUser:       user.User{ID: 5, Name: "Eve"},
+			expectedResult: response.Raw{Data: user.User{ID: 5, Name: "Eve"}},
+			expectedErr:    nil,
+			useMock:        true,
+		},
+		{
+			name:        "Invalid ID",
+			pathParam:   "x",
+			expectedErr: &strconv.NumError{},
+			useMock:     false,
+		},
+		{
+			name:        "Service Error",
+			pathParam:   "7",
+			mockErr:     errors.New("not found"),
+			expectedErr: errors.New("not found"),
+			useMock:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockSvc := NewMockUserServiceInterface(ctrl)
+			h := NewUserHandler(mockSvc)
+
+			req := httptest.NewRequest(http.MethodGet, "/users/{id}", http.NoBody)
+			req = mux.SetURLVars(req, map[string]string{"id": tt.pathParam})
+			ctx.Request = gofrHttp.NewRequest(req)
+
+			if tt.useMock {
+				id, _ := strconv.Atoi(tt.pathParam)
+				mockSvc.EXPECT().GetUserByID(ctx, id).Return(tt.mockUser, tt.mockErr)
+			}
+
+			val, err := h.GetUserByID(ctx)
+
+			if tt.expectedErr != nil {
+				switch tt.expectedErr.(type) {
+				case *strconv.NumError:
+					assert.IsType(t, &strconv.NumError{}, err)
+				default:
+					assert.EqualError(t, tt.expectedErr, err.Error())
+				}
+				assert.Nil(t, val)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedResult, val)
+			}
+		})
 	}
 }

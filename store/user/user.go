@@ -1,22 +1,21 @@
-package userstore
+package user
 
 import (
 	"ThreeLayeredArchitecture/models"
-	"database/sql"
+	"gofr.dev/pkg/gofr"
 	"log"
 )
 
 type UserStore struct {
-	DB *sql.DB
 }
 
-func NewUserStore(db *sql.DB) *UserStore {
-	return &UserStore{DB: db}
+func NewUserStore() *UserStore {
+	return &UserStore{}
 }
 
-func (s *UserStore) GetAllUsers() ([]models.User, error) {
+func (s *UserStore) GetAllUsers(ctx *gofr.Context) ([]models.User, error) {
 	query := "SELECT id, name FROM users"
-	rows, err := s.DB.Query(query)
+	rows, err := ctx.SQL.Query(query)
 
 	if err != nil {
 		return nil, err
@@ -45,9 +44,9 @@ func (s *UserStore) GetAllUsers() ([]models.User, error) {
 	return users, nil
 }
 
-func (s *UserStore) GetUserByID(id int) (models.User, error) {
+func (s *UserStore) GetUserByID(ctx *gofr.Context, id int) (models.User, error) {
 	query := "SELECT id, name FROM users WHERE id = ?"
-	row := s.DB.QueryRow(query, id)
+	row := ctx.SQL.QueryRow(query, id)
 
 	var u models.User
 	err := row.Scan(&u.ID, &u.Name)
@@ -55,9 +54,9 @@ func (s *UserStore) GetUserByID(id int) (models.User, error) {
 	return u, err
 }
 
-func (s *UserStore) CreateUser(user models.User) (models.User, error) {
+func (s *UserStore) CreateUser(ctx *gofr.Context, user models.User) (models.User, error) {
 	query := "INSERT INTO users (name) VALUES (?)"
-	result, err := s.DB.Exec(query, user.Name)
+	result, err := ctx.SQL.Exec(query, user.Name)
 
 	if err != nil {
 		return models.User{}, err

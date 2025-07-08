@@ -1,9 +1,12 @@
 package user
 
-import "ThreeLayeredArchitecture/models"
+import (
+	"ThreeLayeredArchitecture/models"
+	"gofr.dev/pkg/gofr"
+)
 
 type userStoreInterface interface {
-	GetAllUsers() ([]models.User, error)
-	GetUserByID(id int) (models.User, error)
-	CreateUser(user models.User) (models.User, error)
+	GetAllUsers(ctx *gofr.Context) ([]models.User, error)
+	GetUserByID(ctx *gofr.Context, id int) (models.User, error)
+	CreateUser(ctx *gofr.Context, user models.User) (models.User, error)
 }

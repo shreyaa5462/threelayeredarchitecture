@@ -3,6 +3,7 @@ package user
 import (
 	"ThreeLayeredArchitecture/models"
 	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/http/response"
 	"strconv"
 )
 
@@ -20,27 +21,27 @@ func (u *UserHandler) CreateUser(ctx *gofr.Context) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	users, err := u.Service.CreateUser(input)
+	users, err := u.Service.CreateUser(ctx, input)
 	if err != nil {
 		return nil, err
 	}
-	return users, nil
+	return response.Raw{Data: users}, nil
 }
 func (u *UserHandler) GetAllUsers(ctx *gofr.Context) (any, error) {
-	users, err := u.Service.GetAllUsers()
+	users, err := u.Service.GetAllUsers(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return users, nil
+	return response.Raw{Data: users}, nil
 }
 func (u *UserHandler) GetUserByID(ctx *gofr.Context) (any, error) {
 	id, err := strconv.Atoi(ctx.PathParam("id"))
 	if err != nil {
 		return nil, err
 	}
-	users, err := u.Service.GetUserByID(id)
+	users, err := u.Service.GetUserByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	return users, nil
+	return response.Raw{Data: users}, nil
 }
