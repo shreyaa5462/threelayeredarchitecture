@@ -1,0 +1,24 @@
+replicaCount: 1
+
+image:
+  repository: mysql
+  tag: "8.0"
+  pullPolicy: IfNotPresent
+
+mysql:
+  rootPassword: root123
+  mysqlDatabase : test_db
+
+config:
+  DB_HOST: mysql-service
+  DB_USER: root
+  DB_PASSWORD: root123
+  DB_NAME: test_db
+  DB_PORT: 3306
+  DB_DIALECT: mysql
+  DB_CHARSET: utf8
+
+service:
+  name: mysql-service
+  type: ClusterIP
+  port: "3306"

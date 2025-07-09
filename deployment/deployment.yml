@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: go-app
+  template:
+    metadata:
+      labels:
+        app: go-app
+    spec:
+      containers:
+        - name: go-app
+          image: go-http-server
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: go-app-config
+                  key: DB_HOST
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: go-app-config
+                  key: DB_NAME
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: go-app-config
+                  key: DB_PORT
+            - name: DB_DIALECT
+              valueFrom:
+                configMapKeyRef:
+                  name: go-app-config
+                  key: DB_DIALECT
+            - name: DB_CHARSET
+              valueFrom:
+                configMapKeyRef:
+                  name: go-app-config
+                  key: DB_CHARSET
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: go-app-secret
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: go-app-secret
+                  key: DB_PASSWORD
