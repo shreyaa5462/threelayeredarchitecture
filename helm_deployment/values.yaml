@@ -1,0 +1,30 @@
+replicaCount: 3
+
+image:
+  repository: go-http-server
+  tag: "1.3"
+  pullPolicy: Never
+
+service:
+  type: NodePort
+  port: 80
+  targetPort: 8000
+  nodePort: 30081
+
+resources:
+  requests:
+    cpu: "100m"
+  limits:
+    cpu: "500m"
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 50
+
+configMapName: app-env
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

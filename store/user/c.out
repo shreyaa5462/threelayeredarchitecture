@@ -1,0 +1,17 @@
+mode: set
+ThreeLayeredArchitecture/store/user/user.go:11.32,13.2 1 1
+ThreeLayeredArchitecture/store/user/user.go:15.88,20.16 3 1
+ThreeLayeredArchitecture/store/user/user.go:20.16,22.3 1 1
+ThreeLayeredArchitecture/store/user/user.go:24.2,27.18 3 1
+ThreeLayeredArchitecture/store/user/user.go:30.75,32.23 2 1
+ThreeLayeredArchitecture/store/user/user.go:32.23,34.3 1 0
+ThreeLayeredArchitecture/store/user/user.go:36.2,36.16 1 1
+ThreeLayeredArchitecture/store/user/user.go:36.16,38.3 1 0
+ThreeLayeredArchitecture/store/user/user.go:40.2,42.18 2 1
+ThreeLayeredArchitecture/store/user/user.go:42.18,46.17 3 1
+ThreeLayeredArchitecture/store/user/user.go:46.17,48.4 1 0
+ThreeLayeredArchitecture/store/user/user.go:50.3,50.30 1 1
+ThreeLayeredArchitecture/store/user/user.go:53.2,53.19 1 1
+ThreeLayeredArchitecture/store/user/user.go:56.81,62.16 4 1
+ThreeLayeredArchitecture/store/user/user.go:62.16,64.3 1 1
+ThreeLayeredArchitecture/store/user/user.go:66.2,66.18 1 1
